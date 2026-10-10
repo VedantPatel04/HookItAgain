@@ -2,3 +2,13 @@
 AGENTS.md
 webhook_failure_lab_refined_plan.md
 README.md
+.env
+node_modules/
+__pycache__/
+.venv/
+cdk.out/
+web/dist/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+alembic/NOTES.md
