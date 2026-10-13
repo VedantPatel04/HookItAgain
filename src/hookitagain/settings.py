@@ -20,6 +20,7 @@ class Settings(BaseSettings):
 
     database_url: PostgresDsn
     database_direct_url: PostgresDsn
+    supabase_url: AnyHttpUrl
     supabase_jwt_secret: SecretStr
     web_origin: AnyHttpUrl
 
