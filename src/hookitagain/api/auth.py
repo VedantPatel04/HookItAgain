@@ -1,24 +1,36 @@
 import uuid
+from functools import lru_cache
 
 import jwt
 from fastapi import Header, HTTPException
+from jwt import PyJWKClient
 
 from hookitagain.settings import get_settings
 
 
-def require_user_id(
-    authorization: str | None = Header(default=None),
-) -> uuid.UUID:
-    """checks the Authorization header, verifies the JWT, and returns the caller's user id, or raises 401 if any of that fails"""
-    if authorization is None:
-        raise HTTPException(status_code=401)
-    scheme, _, token = authorization.partition(" ")
-    if scheme != "Bearer" or not token:
-        raise HTTPException(status_code=401)
+@lru_cache
+def _jwks_client() -> PyJWKClient:
+    base = str(get_settings().supabase_url).rstrip("/")
+    return PyJWKClient(f"{base}/auth/v1/.well-known/jwks.json")
 
+
+def _payload_from_token(token: str) -> dict:
     settings = get_settings()
     try:
-        payload = jwt.decode(
+        key = _jwks_client().get_signing_key_from_jwt(token).key
+        return jwt.decode(
+            token,
+            key,
+            algorithms=["ES256", "RS256"],
+            audience="authenticated",
+        )
+    except jwt.PyJWKClientError:
+        pass
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401) from None
+
+    try:
+        return jwt.decode(
             token,
             settings.supabase_jwt_secret.get_secret_value(),
             algorithms=["HS256"],
@@ -27,7 +39,19 @@ def require_user_id(
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401) from None
 
-    sub = payload.get("sub") # "sub" is the user id
+
+def require_user_id(
+    authorization: str | None = Header(default=None),
+) -> uuid.UUID:
+    """Return the JWT subject as a user id, or raise 401 if the Bearer token is missing or invalid."""
+    if authorization is None:
+        raise HTTPException(status_code=401)
+    scheme, _, token = authorization.partition(" ")
+    if scheme != "Bearer" or not token:
+        raise HTTPException(status_code=401)
+
+    payload = _payload_from_token(token)
+    sub = payload.get("sub")
     if not sub:
         raise HTTPException(status_code=401)
     try:
