@@ -1,5 +1,5 @@
-# lint, unit tests, and cdk synth on every push and PR.
-# no migrate (needs Supabase). no deploy (needs AWS secrets and the Lambda quota).
+# lint, tests, alembic on CI postgres, web build, and cdk synth on every push and PR.
+# no migrate against Supabase. no cdk deploy (OIDC is the next slice).
 name: ci
 
 on:
@@ -11,19 +11,40 @@ permissions:
 
 jobs:
   app:
-    name: ruff
+    name: ruff and pytest
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: hookitagain
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/hookitagain
+      DATABASE_DIRECT_URL: postgresql://postgres:postgres@localhost:5432/hookitagain
+      SUPABASE_URL: https://example.supabase.co
+      SUPABASE_JWT_SECRET: ci-test-secret
+      WEB_ORIGIN: http://localhost:5173
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install -e .
-      - run: pip install "ruff>=0.8,<1"
+      - run: pip install "ruff>=0.8,<1" pytest
       - run: ruff check src
+      - run: pytest tests -q
 
   web:
-    name: web lint
+    name: web lint and build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -37,6 +58,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npm run lint
+      - run: npm run build
 
   infra:
     name: infra tests and synth
