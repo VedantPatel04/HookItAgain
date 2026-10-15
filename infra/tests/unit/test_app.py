@@ -4,14 +4,17 @@ from aws_cdk import App
 from app import resolve_stage
 
 
-def test_resolve_stage_defaults_to_dev() -> None:
-    app = App()
-    assert resolve_stage(app) == "dev"
-
-
-def test_resolve_stage_accepts_demo() -> None:
-    app = App(context={"stage": "demo"})
-    assert resolve_stage(app) == "demo"
+@pytest.mark.parametrize(
+    "context, expected",
+    [
+        ({}, "dev"),
+        ({"stage": "demo"}, "demo"),
+    ],
+)
+def test_resolve_stage_only_allows_dev_and_demo(
+    context: dict, expected: str
+) -> None:
+    assert resolve_stage(App(context=context)) == expected
 
 
 def test_resolve_stage_rejects_unknown_stage() -> None:
