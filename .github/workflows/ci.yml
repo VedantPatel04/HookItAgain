@@ -1,5 +1,6 @@
 # lint, tests, alembic on CI postgres, web build, and cdk synth on every push and PR.
-# no migrate against Supabase. no cdk deploy (OIDC is the next slice).
+# cdk deploy on main only, after those jobs, via GitHub OIDC (no long-lived AWS keys).
+# no migrate against Supabase in Actions.
 name: ci
 
 on:
@@ -77,3 +78,29 @@ jobs:
       - run: pip install -r requirements.txt -r requirements-dev.txt
       - run: python -m pytest tests/unit -q
       - run: npx --yes cdk synth -c stage=dev
+
+  deploy:
+    name: cdk deploy dev
+    needs: [app, web, infra]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: pip install -r requirements.txt
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+      - run: npx --yes cdk deploy -c stage=dev --require-approval never
