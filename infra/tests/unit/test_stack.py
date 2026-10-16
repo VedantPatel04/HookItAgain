@@ -1,3 +1,5 @@
+import json
+
 from aws_cdk import App
 from aws_cdk.assertions import Template
 
@@ -57,3 +59,18 @@ def test_reconciler_schedule_and_concurrency() -> None:
         "AWS::Events::Rule",
         {"ScheduleExpression": "rate(1 minute)"},
     )
+
+
+def test_github_oidc_role_trusts_main_only() -> None:
+    template = _template()
+    oidc_roles = [
+        resource
+        for resource in template.find_resources("AWS::IAM::Role").values()
+        if "AssumeRoleWithWebIdentity" in json.dumps(resource)
+        and "token.actions.githubusercontent.com" in json.dumps(resource)
+    ]
+    assert len(oidc_roles) == 1
+    blob = json.dumps(oidc_roles[0])
+    assert "refs/heads/main" in blob
+    assert "AdministratorAccess" not in blob
+    assert "sts:AssumeRole" in blob

@@ -6,6 +6,7 @@ from aws_cdk import (
     Stack,
     aws_events as events,
     aws_events_targets as events_targets,
+    aws_iam as iam,
     aws_lambda as lambda_,
     aws_lambda_event_sources as lambda_event_sources,
     aws_sqs as sqs,
@@ -25,6 +26,8 @@ from hookitagain_infra.contracts import (
 )
 
 _SRC = Path(__file__).resolve().parents[2] / "src"
+_GITHUB_REPO = "VedantPatel04/HookItAgain"
+_CDK_QUALIFIER = "hnb659fds"
 
 
 class InfraStack(Stack):
@@ -96,6 +99,50 @@ class InfraStack(Stack):
         )
 
         CfnOutput(self, "IngestUrl", value=self.ingest_url.url)
+
+        github_oidc = iam.OpenIdConnectProvider( #GitHub OIDC so Actions can assume a role without long-lived access keys
+            self,
+            "GitHubOidc",
+            url="https://token.actions.githubusercontent.com",
+            client_ids=["sts.amazonaws.com"],
+        )
+        self.github_deploy_role = iam.Role( #this is the role main's deploy job assumes - only that repo and ref, and it may only assume the CDK bootstrap roles
+            self,
+            "GitHubDeploy",
+            assumed_by=iam.WebIdentityPrincipal(
+                github_oidc.open_id_connect_provider_arn,
+                conditions={
+                    "StringEquals": {
+                        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+                    },
+                    "StringLike": {
+                        "token.actions.githubusercontent.com:sub": (
+                            f"repo:{_GITHUB_REPO}:ref:refs/heads/main"
+                        ),
+                    },
+                },
+            ),
+        )
+        bootstrap_account_region = f"{self.account}-{self.region}"
+        for kind in (
+            "deploy-role",
+            "file-publishing-role",
+            "image-publishing-role",
+            "lookup-role",
+        ):
+            self.github_deploy_role.add_to_policy(
+                iam.PolicyStatement(
+                    actions=["sts:AssumeRole"],
+                    resources=[
+                        f"arn:aws:iam::{self.account}:role/cdk-{_CDK_QUALIFIER}-{kind}-{bootstrap_account_region}"
+                    ],
+                )
+            )
+        CfnOutput(
+            self,
+            "GitHubDeployRoleArn",
+            value=self.github_deploy_role.role_arn,
+        )
 
 
 # deploy with `cdk deploy`
