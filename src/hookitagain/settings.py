@@ -1,6 +1,7 @@
 from functools import lru_cache
 
-from pydantic import AnyHttpUrl, PostgresDsn, SecretStr
+from cryptography.fernet import Fernet
+from pydantic import AnyHttpUrl, PostgresDsn, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,6 +24,17 @@ class Settings(BaseSettings):
     supabase_url: AnyHttpUrl
     supabase_jwt_secret: SecretStr
     web_origin: AnyHttpUrl
+    secret_encryption_key: SecretStr
+
+    @field_validator("secret_encryption_key")
+    @classmethod
+    def secret_encryption_key_must_be_fernet(cls, value: SecretStr) -> SecretStr:
+        # wrong key shape fails at boot
+        try:
+            Fernet(value.get_secret_value().encode())
+        except (ValueError, TypeError) as exc:
+            raise ValueError("SECRET_ENCRYPTION_KEY must be a Fernet key") from exc
+        return value
 
 
 @lru_cache

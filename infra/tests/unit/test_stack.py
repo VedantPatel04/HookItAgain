@@ -76,3 +76,12 @@ def test_github_oidc_role_trusts_main_only() -> None:
     assert "repo:VedantPatel04/HookItAgain:ref:" not in blob
     assert "AdministratorAccess" not in blob
     assert "sts:AssumeRole" in blob
+
+
+def test_secret_encryption_key_is_readable_by_runtime_lambdas() -> None:
+    template = _template()
+    secrets = template.find_resources("AWS::SecretsManager::Secret")
+    assert len(secrets) == 1
+    policies = json.dumps(template.find_resources("AWS::IAM::Policy"))
+    assert "secretsmanager:GetSecretValue" in policies
+    assert "SecretEncryptionKey" in policies

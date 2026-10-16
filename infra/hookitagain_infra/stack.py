@@ -9,6 +9,7 @@ from aws_cdk import (
     aws_iam as iam,
     aws_lambda as lambda_,
     aws_lambda_event_sources as lambda_event_sources,
+    aws_secretsmanager as secretsmanager,
     aws_sqs as sqs,
 )
 from constructs import Construct
@@ -102,6 +103,23 @@ class InfraStack(Stack):
         )
 
         CfnOutput(self, "IngestUrl", value=self.ingest_url.url)
+
+        # Fernet key for BYTEA ciphertext. AWS fills a random string on create.
+        # Replace it with a Fernet key (same value as Render SECRET_ENCRYPTION_KEY)
+        # before source-create or ingest uses it.
+        self.secret_encryption_key = secretsmanager.Secret(
+            self,
+            "SecretEncryptionKey",
+            description="Fernet key for source and destination secret ciphertext",
+        )
+        self.secret_encryption_key.grant_read(self.ingest)
+        self.secret_encryption_key.grant_read(self.worker)
+        self.secret_encryption_key.grant_read(self.reconciler)
+        CfnOutput(
+            self,
+            "SecretEncryptionKeyArn",
+            value=self.secret_encryption_key.secret_arn,
+        )
 
         github_oidc = iam.OpenIdConnectProvider( #GitHub OIDC so Actions can assume a role without long-lived access keys
             self,
