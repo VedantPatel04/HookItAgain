@@ -15,5 +15,5 @@ def encrypt_secret(plaintext: str, *, key: str | None = None) -> bytes:
 
 
 def decrypt_secret(ciphertext: bytes, *, key: str | None = None) -> str:
-    # HMAC verify and outbound sign. list APIs never call this
+    # HMAC verify (ingest) and outbound sign (worker). list APIs never call this
     return _fernet(key).decrypt(ciphertext).decode("utf-8")

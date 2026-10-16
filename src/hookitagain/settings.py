@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     @field_validator("secret_encryption_key")
     @classmethod
     def secret_encryption_key_must_be_fernet(cls, value: SecretStr) -> SecretStr:
-        #wrong key shape fails at boot
+        # wrong key shape fails at boot
         try:
             Fernet(value.get_secret_value().encode())
         except (ValueError, TypeError) as exc:
