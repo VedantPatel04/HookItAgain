@@ -11,6 +11,7 @@ def test_settings_fail_fast_without_env(monkeypatch: pytest.MonkeyPatch) -> None
         "SUPABASE_URL",
         "SUPABASE_JWT_SECRET",
         "WEB_ORIGIN",
+        "SECRET_ENCRYPTION_KEY",
     ):
         monkeypatch.delenv(key, raising=False)
     with pytest.raises(ValidationError):

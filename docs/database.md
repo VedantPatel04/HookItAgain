@@ -42,7 +42,7 @@ Users map to projects through an ownership table so ingest (which has no JWT) ca
 | `name` | TEXT NOT NULL | |
 | `type` | TEXT NOT NULL | CHECK `https` \| `cli`. |
 | `url` | TEXT | Required for `https`, null for `cli`. CHECK: type/url consistent. |
-| `signing_secret_ciphertext` | BYTEA NOT NULL | Outgoing HMAC secret. |
+| `signing_secret_ciphertext` | BYTEA NOT NULL | Outgoing HMAC secret. Fernet ciphertext. One process key. Plaintext is never stored. |
 | `created_at` | TIMESTAMPTZ NOT NULL | |
 
 CHECK: `type = 'https'` implies `url IS NOT NULL`; `type = 'cli'` implies `url IS NULL`. Unique `(project_id, id)` for composite FKs.
@@ -69,7 +69,7 @@ Unique `(project_id, id)` for composite FKs from children.
 | ------ | ---- | ----- |
 | `source_id` | UUID PK FK → sources | One active secret per source. |
 | `project_id` | UUID NOT NULL | Composite FK with `source_id`. |
-| `ciphertext` | BYTEA NOT NULL | Encrypted at rest. Never selected by list APIs. |
+| `ciphertext` | BYTEA NOT NULL | Fernet ciphertext. Same process key as destination signing secrets. Never selected by list APIs. Plaintext is never stored. |
 | `created_at` | TIMESTAMPTZ NOT NULL | |
 
 ### `events`
