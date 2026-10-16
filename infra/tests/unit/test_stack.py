@@ -71,6 +71,8 @@ def test_github_oidc_role_trusts_main_only() -> None:
     ]
     assert len(oidc_roles) == 1
     blob = json.dumps(oidc_roles[0])
+    assert "VedantPatel04@72629546/HookItAgain@1375425722" in blob
     assert "refs/heads/main" in blob
+    assert "repo:VedantPatel04/HookItAgain:ref:" not in blob
     assert "AdministratorAccess" not in blob
     assert "sts:AssumeRole" in blob

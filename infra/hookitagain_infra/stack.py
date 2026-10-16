@@ -26,7 +26,10 @@ from hookitagain_infra.contracts import (
 )
 
 _SRC = Path(__file__).resolve().parents[2] / "src"
-_GITHUB_REPO = "VedantPatel04/HookItAgain"
+# GitHub's OIDC sub uses owner@id/repo@id (use_immutable_subject), not owner/repo
+_GITHUB_OIDC_SUB = (
+    "repo:VedantPatel04@72629546/HookItAgain@1375425722:ref:refs/heads/main"
+)
 _CDK_QUALIFIER = "hnb659fds"
 
 
@@ -116,9 +119,7 @@ class InfraStack(Stack):
                         "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
                     },
                     "StringLike": {
-                        "token.actions.githubusercontent.com:sub": (
-                            f"repo:{_GITHUB_REPO}:ref:refs/heads/main"
-                        ),
+                        "token.actions.githubusercontent.com:sub": _GITHUB_OIDC_SUB,
                     },
                 },
             ),
