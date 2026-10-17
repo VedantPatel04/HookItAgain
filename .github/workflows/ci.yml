@@ -34,7 +34,6 @@ jobs:
       SUPABASE_URL: https://example.supabase.co
       SUPABASE_JWT_SECRET: ci-test-secret
       WEB_ORIGIN: http://localhost:5173
-      SECRET_ENCRYPTION_KEY: sYvTP1IqzFvkcKyhyApf2WoxBkozb7TCgv_Jyh4hdUY=
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
