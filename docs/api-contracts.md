@@ -75,7 +75,7 @@ A retry with the same `(source_id, provider_delivery_id)` returns the **same** b
 
 ## 2. Control API (FastAPI on Render)
 
-Base path: `/v1`.
+Base path: `/api`.
 
 Header: `Authorization: Bearer <Supabase JWT>`.
 
@@ -90,27 +90,27 @@ Control-plane error codes: `unauthorized`, `forbidden`, `not_found`, `validation
 
 ### Health
 
-`GET /v1/health` — unauthenticated.
+`GET /api/health` — unauthenticated.
 
 `200` `{"status": "ok"}`
 
 ### Projects
 
-`POST /v1/projects`  
+`POST /api/projects`  
 Body: `{"name": "string"}`  
 `201` `{id, name, created_at}`
 
-`GET /v1/projects`  
+`GET /api/projects`  
 `200` `{items: [{id, name, created_at}]}`
 
-`GET /v1/projects/{project_id}`  
+`GET /api/projects/{project_id}`  
 `200` `{id, name, created_at}`
 
 ### Sources
 
 Create a destination first, then a source. Ingest sends the Event to `destination_id`.
 
-`POST /v1/projects/{project_id}/sources`  
+`POST /api/projects/{project_id}/sources`  
 Body: `{"name": "string", "provider": "generic_hmac" | "github", "destination_id": "uuid"}`  
 `201`:
 
@@ -129,17 +129,17 @@ Body: `{"name": "string", "provider": "generic_hmac" | "github", "destination_id
 
 `secret` is returned **only on create** (and on rotate). It is never listed later.
 
-`GET /v1/projects/{project_id}/sources`  
+`GET /api/projects/{project_id}/sources`  
 `200` `{items: [{id, project_id, name, provider, destination_id, ingest_url, created_at}]}` — no secrets.
 
-`GET /v1/sources/{source_id}` — same public fields.
+`GET /api/sources/{source_id}` — same public fields.
 
-`POST /v1/sources/{source_id}/rotate-secret`  
+`POST /api/sources/{source_id}/rotate-secret`  
 `200` `{secret}` — new plaintext once; old secret invalidated.
 
 ### Destinations
 
-`POST /v1/projects/{project_id}/destinations`
+`POST /api/projects/{project_id}/destinations`
 
 HTTPS:
 
@@ -153,19 +153,19 @@ CLI:
 {"name": "local", "type": "cli"}
 ```
 
-`201` `{id, project_id, name, type, url, created_at}`  
-`url` is null for `cli`. HTTPS URLs are validated at write time against the SSRF rules; invalid is `422`.
+`201` `{id, project_id, name, type, url, signing_secret, created_at}`  
+`signing_secret` is plaintext once, same rule as source `secret`. It is omitted from later GET and list. `url` is null for `cli`. HTTPS URLs are validated at write time against the SSRF rules; invalid is `422`.
 
-`GET /v1/projects/{project_id}/destinations`  
-`GET /v1/destinations/{destination_id}`
+`GET /api/projects/{project_id}/destinations`  
+`GET /api/destinations/{destination_id}`
 
 Each HTTPS destination has a **destination signing secret** used for outgoing HMAC. It is returned only on create/rotate, same pattern as source secrets:
 
-`POST /v1/destinations/{destination_id}/rotate-signing-secret` → `200` `{signing_secret}`
+`POST /api/destinations/{destination_id}/rotate-signing-secret` → `200` `{signing_secret}`
 
 ### Events
 
-`GET /v1/projects/{project_id}/events`
+`GET /api/projects/{project_id}/events`
 
 Query: `source_id`, `event_type`, `status` (`accepted` | `payload_purged`), `from`, `to` (RFC 3339), `limit` (default 50, max 100), `before` (cursor: event id).
 
@@ -192,12 +192,12 @@ No payload-body search (stretch).
 }
 ```
 
-`GET /v1/events/{event_id}`  
+`GET /api/events/{event_id}`  
 Same fields plus `body` (raw string or null if purged), `content_type`, and `deliveries` (summary list: `id, destination_id, status, attempt_count, replayed_from_delivery_id, suite_run_id`).
 
 ### Deliveries and attempts
 
-`GET /v1/deliveries/{delivery_id}`
+`GET /api/deliveries/{delivery_id}`
 
 ```json
 {
@@ -223,13 +223,13 @@ Same fields plus `body` (raw string or null if purged), `content_type`, and `del
 }
 ```
 
-`POST /v1/deliveries/{delivery_id}/replay`  
+`POST /api/deliveries/{delivery_id}/replay`  
 `201` `{id, event_id, destination_id, status: "queued", replayed_from_delivery_id}`  
 Creates a new Delivery + OutboxJob. Does not modify prior attempts.
 
 ### Suites
 
-`POST /v1/projects/{project_id}/suites`  
+`POST /api/projects/{project_id}/suites`  
 Body:
 
 ```json
@@ -251,20 +251,20 @@ Body:
 - `reorder`: `{"event_ids": ["uuid", "uuid"], "release_offsets_seconds": [5, 0]}`  
   Same length arrays. Offsets are relative to suite-run start.
 
-`GET /v1/projects/{project_id}/suites`  
-`GET /v1/suites/{suite_id}`
+`GET /api/projects/{project_id}/suites`  
+`GET /api/suites/{suite_id}`
 
-`POST /v1/suites/{suite_id}/runs`  
+`POST /api/suites/{suite_id}/runs`  
 Body: `{"scheduled_for": "RFC3339 or null"}`  
 `null` means run now; the server stores `scheduled_for` as the request timestamp.  
 `201` `{id, suite_id, scheduled_for, status: "scheduled"}`  
 `409 conflict` if `(suite_id, scheduled_for)` already exists.
 
-`GET /v1/suites/{suite_id}/runs`
+`GET /api/suites/{suite_id}/runs`
 
 ### Relay tokens (CLI)
 
-`POST /v1/destinations/{destination_id}/relay-tokens`  
+`POST /api/destinations/{destination_id}/relay-tokens`  
 Destination `type` must be `cli`.  
 `201`:
 
@@ -272,7 +272,7 @@ Destination `type` must be `cli`.
 {
   "token": "opaque-or-jwt",
   "expires_at": "2026-10-09T00:15:00Z",
-  "websocket_url": "wss://.../v1/relay"
+  "websocket_url": "wss://.../api/relay"
 }
 ```
 
@@ -282,7 +282,7 @@ TTL is in [timeouts-quotas.md](timeouts-quotas.md).
 
 ## 3. Relay WebSocket
 
-`GET /v1/relay` Upgrade, query `token`.
+`GET /api/relay` Upgrade, query `token`.
 
 Invalid/expired token: close `4401`. Destination already connected: close `4409` (one live CLI per destination).
 

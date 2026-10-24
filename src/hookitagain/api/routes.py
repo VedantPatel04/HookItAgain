@@ -23,14 +23,18 @@ def list_projects( #protected endpoint - lists all projects for current user
     user_id: uuid.UUID = Depends(require_user_id),
     session: Session = Depends(get_session),
 ) -> dict:
+    
+    
     projects = session.scalars(select(Project).where(Project.user_id == user_id)).all()
-    return {
-        "items": [
+    items = []
+    for project in projects:
+        items.append(
             {
                 "id": str(project.id),
                 "name": project.name,
                 "created_at": _rfc3339_utc(project.created_at),
             }
-            for project in projects
-        ]
-    }
+        )
+    return {"items": items}
+
+# POST /projects - body: {name}

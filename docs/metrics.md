@@ -28,7 +28,7 @@ Emit from ingest, worker, reconciler, and (where noted) CloudWatch/SQS. Metric n
 | `sustainable_events_per_second` | events/s | Highest constant ingest rate at which `queue_age_seconds` stays bounded and no accepted event is unaccounted. | Increase rate until backlog grows or ack latency explodes; report the last stable rate. |
 | `burst_drain_seconds` | seconds | Time from enqueue of a fixed burst (lock **1 000** events of the 1024-byte payload) until queue empty and all deliveries terminal. | Pause worker, load burst, start worker, time to drain. |
 | `queries_per_ingest` | count | SQL statements per accepted ingest (including usage/budget). | Trace one ingest. |
-| `queries_per_event_detail` | count | SQL statements for `GET /v1/events/{id}` (detail screen). | Trace one request. |
+| `queries_per_event_detail` | count | SQL statements for `GET /api/events/{id}` (detail screen). | Trace one request. |
 | `compute_ms_per_delivered_event` | milliseconds | Ingest + worker billed duration / unique succeeded deliveries for a workload. | Same workload before and after a change. |
 | `queue_requests_per_delivered_event` | count | SQS send/receive/delete counts / unique succeeded deliveries. | CloudWatch vs delivery count. |
 | `stored_bytes_per_delivered_event` | bytes | Increase in retained payload + attempt excerpts / unique succeeded deliveries. | Measure DB before/after. |

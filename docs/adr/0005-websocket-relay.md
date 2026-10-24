@@ -12,7 +12,7 @@ Putting the relay on the same service as the control API keeps the free-tier foo
 
 ## Decision
 
-- The CLI opens a WebSocket to the FastAPI relay using a **short-lived relay token** minted by `POST /v1/destinations/{id}/relay-tokens` (JWT-authenticated, tenant-scoped). The token is sent on connect, not as a long-lived API key.
+- The CLI opens a WebSocket to the FastAPI relay using a **short-lived relay token** minted by `POST /api/destinations/{id}/relay-tokens` (JWT-authenticated, tenant-scoped). The token is sent on connect, not as a long-lived API key.
 - Protocol: server pushes `{attempt_id, delivery_id, headers, body}`; CLI POSTs to localhost, then replies `{attempt_id, status, headers, body, duration_ms}`. Heartbeat is WebSocket ping/pong.
 - A dropped socket is an ordinary failed attempt (`cli_disconnected` or `cli_timeout`). SQS retries like any other destination failure.
 - The CLI reconnects with exponential backoff. Duplicate suppression key is **`attempt_id`**: if the same attempt is forwarded twice (reconnect racing a redelivery), localhost is POSTed at most once for that id.

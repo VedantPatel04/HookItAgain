@@ -14,7 +14,7 @@ export default function App() {
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) return;
-      const res = await fetch(`${apiUrl}/v1/projects`, {
+      const res = await fetch(`${apiUrl}/api/projects`, {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       setBody(`${res.status} ${await res.text()}`);

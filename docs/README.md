@@ -15,10 +15,11 @@ Product intent, architecture, and operating boundaries live in [`webhook_failure
    - [0004 — SQS Standard](adr/0004-sqs-standard.md)
    - [0005 — WebSocket relay](adr/0005-websocket-relay.md)
 4. [API contracts](api-contracts.md)
-5. [Database constraints](database.md)
-6. [Timeouts and quotas](timeouts-quotas.md)
-7. [Error categories](error-categories.md)
-8. [Engineering metrics](metrics.md) and the [baseline log](metrics/baselines.md)
+5. [Secrets and HMAC](secrets.md)
+6. [Database constraints](database.md)
+7. [Timeouts and quotas](timeouts-quotas.md)
+8. [Error categories](error-categories.md)
+9. [Engineering metrics](metrics.md) and the [baseline log](metrics/baselines.md)
 
 ## What this pass does not include
 
