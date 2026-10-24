@@ -6,7 +6,7 @@ HMAC-SHA256 is a value computed using bytes of payload and source-secret by the 
 
 ## Create
 
-FastAPI creates both secrets. The provider does not.
+FastAPI creates both secrets. The provider does not. Each minted secret is `secrets.token_urlsafe(32)`. That string is the HMAC shared secret. It is not the Fernet key.
 
 On destination create, FastAPI generates a destination signing secret. It encrypts that value into `destinations.signing_secret_ciphertext`. `destinations.url` stays plaintext so the worker can POST there.
 

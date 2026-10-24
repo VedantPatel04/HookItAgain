@@ -80,7 +80,7 @@ Provider POST → ingest Lambda → Postgres commit (Event + Delivery + OutboxJo
 ### Replay after DLQ (or any replay)
 
 - **Problem:** The operator wants another dispatch without erasing why the last one failed.
-- **Owner:** Control API `POST /v1/deliveries/{id}/replay`.
+- **Owner:** Control API `POST /api/deliveries/{id}/replay`.
 - **Persisted state:** New Delivery (`queued`) with `replayed_from_delivery_id`, new OutboxJob `pending`. Prior Delivery and attempts are untouched.
 - **Retry:** The new Delivery has its own five SQS receives.
 - **Terminal:** New Delivery `succeeded` or `dead_lettered`. Old rows stay append-only history.

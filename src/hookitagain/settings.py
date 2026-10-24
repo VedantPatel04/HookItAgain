@@ -1,6 +1,7 @@
 from functools import lru_cache
 
 from cryptography.fernet import Fernet
+# pydantic settings packages :)
 from pydantic import AnyHttpUrl, PostgresDsn, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -24,7 +25,8 @@ class Settings(BaseSettings):
     supabase_url: AnyHttpUrl
     supabase_jwt_secret: SecretStr
     web_origin: AnyHttpUrl
-    secret_encryption_key: SecretStr
+    secret_encryption_key: SecretStr #SecretStr type
+    ingest_base_url: AnyHttpUrl
 
     @field_validator("secret_encryption_key")
     @classmethod
