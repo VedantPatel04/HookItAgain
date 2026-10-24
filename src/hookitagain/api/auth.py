@@ -41,20 +41,21 @@ def _payload_from_token(token: str) -> dict:
 
 
 def require_user_id(
-    authorization: str | None = Header(default=None),
-) -> uuid.UUID:
+    authorization: str | None = Header(default=None), #input: fastapi injects raw auth header via Header()
+) -> uuid.UUID: 
     """Return the JWT subject as a user id, or raise 401 if the Bearer token is missing or invalid."""
-    if authorization is None:
+    if authorization is None: #check if header is present
         raise HTTPException(status_code=401)
-    scheme, _, token = authorization.partition(" ")
-    if scheme != "Bearer" or not token:
+    scheme, _, token = authorization.partition(" ") #split into scheme(Bearer, separatr, JWT token)
+    if scheme != "Bearer" or not token: #check if token present and "bearer" scheme is used
         raise HTTPException(status_code=401)
 
-    payload = _payload_from_token(token)
-    sub = payload.get("sub")
+    payload = _payload_from_token(token)#parse AND validate token into dictionary
+    sub = payload.get("sub")#read JWT subject from payload dict
     if not sub:
         raise HTTPException(status_code=401)
     try:
+        # JWT sub is a string. parse to UUID so the rest of the app uses a typed id not a str
         return uuid.UUID(str(sub))
     except ValueError:
-        raise HTTPException(status_code=401) from None
+        raise HTTPException(status_code=401) from None #same error codes for missing vs. malformed vs. unverifiable

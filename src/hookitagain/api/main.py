@@ -10,11 +10,14 @@ from hookitagain.settings import get_settings
 app = FastAPI(title = "hookitagain API")
 settings = get_settings()
 
-app.add_middleware( #allows frontend and backend to communicate from different ports, domains, protocols (http, https, etc.)
+# allows frontend and backend to communicate from different ports, domains,
+# protocols (http, https, etc.)
+app.add_middleware(
     CORSMiddleware,
     allow_origins=[str(settings.web_origin).rstrip("/")],
     allow_credentials=True,
-    allow_methods=["*"], #allow specific http method requests from different origins (PUT, POST or use * for wildcard "all of them")
+    allow_methods=["*"], #allow specific http method requests from different origins (PUT, POST or
+                         #use * for wildcard "all of them")
     allow_headers=["*"], #allow specific headers from different origins (Content-Type, Authorization, etc.)
 )
 
