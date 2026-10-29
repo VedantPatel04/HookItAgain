@@ -24,15 +24,15 @@ class CreateProjectBody(BaseModel):
     name: str
 
 
-class CreateDestinationBody(BaseModel):
+class CreateDestinationBody(BaseModel): # schema for request body
     name: str
     type: str
     url: str | None = None
 
 
-class CreateSourceBody(BaseModel):
-    name: str
-    provider: str
+class CreateSourceBody(BaseModel): # schema for request body
+    name: str                   
+    provider: str                # "source" is an identity assigned to a provider used by Ingest functionality   
     destination_id: uuid.UUID
 
 
@@ -313,7 +313,46 @@ def create_source(
     user_id: uuid.UUID = Depends(require_user_id),
     session: Session = Depends(get_session),
 ) -> dict:
-    pass
+    project = _project_for_user(session, project_id, user_id)
+    if project is None:
+        return error_response(404, "not_found", "Project not found.")
+
+    if body.provider not in ("generic_hmac", "github"):
+        return error_response(422, "validation_error", "Provider must be generic_hmac or github.")
+
+    destination_query = select(Destination).where(
+        Destination.id == body.destination_id,
+        Destination.project_id == project.id, # this project, not another of the user's
+    )
+    destination = session.scalars(destination_query).one_or_none()
+    if destination is None:
+        return error_response(404, "not_found", "Destination not found.")
+
+    secret = _new_shared_secret() # plaintext source secret, once
+    now = datetime.now(timezone.utc)
+    source = Source(
+        project_id=project.id,
+        name=body.name,
+        provider=body.provider,
+        destination_id=destination.id,
+        created_at=now,
+    )
+    session.add(source)
+    session.flush() # source.id from gen_random_uuid() before source_secrets insert
+
+    source_secret = SourceSecret(
+        source_id=source.id,
+        project_id=project.id,
+        ciphertext=encrypt_secret(secret), # Fernet BYTEA
+        created_at=now,
+    )
+    session.add(source_secret)
+    session.commit()
+    session.refresh(source)
+
+    item = _source_public(source)
+    item["secret"] = secret # omitted from later GET and list
+    return item
 
 
 # GET /api/projects/{project_id}/sources
