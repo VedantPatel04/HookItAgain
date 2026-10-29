@@ -16,6 +16,13 @@ from hookitagain.db.models import Destination, Profile, SourceSecret
 from hookitagain.db.session import get_engine
 from hookitagain.settings import get_settings
 
+
+'''
+use the following LOCAL environment variables in the terminal to run the tests:
+docker start hookitagain-test-pg
+export DATABASE_URL=postgresql://postgres:postgres@localhost:5433/hookitagain
+export DATABASE_DIRECT_URL=postgresql://postgres:postgres@localhost:5433/hookitagain
+'''
 # HELPER FUNCTIONS FOR TESTS
 def _database_host() -> str | None:
     raw = os.environ.get("DATABASE_URL")
