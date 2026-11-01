@@ -81,7 +81,22 @@ def test_github_oidc_role_trusts_main_only() -> None:
 def test_secret_encryption_key_is_readable_by_runtime_lambdas() -> None:
     template = _template()
     secrets = template.find_resources("AWS::SecretsManager::Secret")
-    assert len(secrets) == 1
+    assert len(secrets) == 2
     policies = json.dumps(template.find_resources("AWS::IAM::Policy"))
     assert "secretsmanager:GetSecretValue" in policies
     assert "SecretEncryptionKey" in policies
+    assert "DatabaseUrl" in policies
+
+
+def test_runtime_lambdas_have_database_fernet_and_queue_env() -> None:
+    template = _template()
+    handlers = (
+        "hookitagain.ingest.handler.handle",
+        "hookitagain.worker.handler.handle",
+        "hookitagain.reconciler.handler.handle",
+    )
+    for handler in handlers:
+        env = _function_by_handler(template, handler)["Environment"]["Variables"]
+        assert "DATABASE_URL" in env
+        assert "SECRET_ENCRYPTION_KEY" in env
+        assert "DELIVERY_QUEUE_URL" in env

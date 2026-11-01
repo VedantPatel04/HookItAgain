@@ -88,7 +88,7 @@ def _create_https_destination(client: TestClient, headers: dict[str, str], proje
     )
     assert response.status_code == 201
     return response.json()
-# ------------------------------------------------------------------------------------------------- End of Helper Functions :)
+# End of Helper Functions :)
 
 def test_project_create_then_get(signed_in: tuple[TestClient, dict[str, str]]) -> None:
     client, headers = signed_in
