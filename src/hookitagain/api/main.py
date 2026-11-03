@@ -38,5 +38,12 @@ def health_check():
     return {"status": "ok"}
 
 
+# Controlled staging receiver for worker POSTs. no JWT. returns 200.
+@app.post("/api/staging/receive")
+async def staging_receive(request: Request):
+    await request.body()
+    return {"status": "ok"}
+
+
 app.include_router(api_router, prefix="/api")
 

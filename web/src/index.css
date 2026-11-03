@@ -66,6 +66,24 @@ body {
   margin: 0;
 }
 
+.lab {
+  text-align: left;
+  padding: 24px;
+}
+
+.lab ul {
+  padding-left: 20px;
+}
+
+.lab pre {
+  overflow: auto;
+  background: var(--code-bg);
+  padding: 12px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 14px;
+}
+
 h1,
 h2 {
   font-family: var(--heading);

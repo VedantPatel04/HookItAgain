@@ -2,19 +2,27 @@ import secrets
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from pydantic import BaseModel
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from hookitagain.api.auth import require_user_id
 from hookitagain.api.errors import error_response
 from hookitagain.api.ssrf import https_destination_url_rejected
 from hookitagain.crypto import encrypt_secret
-from hookitagain.db.models import Destination, Project, Source, SourceSecret
+from hookitagain.db.models import (
+    Delivery,
+    DeliveryAttempt,
+    Destination,
+    Event,
+    Project,
+    Source,
+    SourceSecret,
+)
 from hookitagain.db.session import get_session
 from hookitagain.settings import get_settings
 
@@ -82,6 +90,41 @@ def _source_for_user(
     return session.scalars(query).one_or_none() #run the query on the db
 
 
+def _event_for_user(
+    session: Session, event_id: uuid.UUID, user_id: uuid.UUID
+) -> Event | None:
+    query = (
+        select(Event)
+        .join(Project, Event.project_id == Project.id)
+        .where(Event.id == event_id, Project.user_id == user_id)
+    )
+    return session.scalars(query).one_or_none()
+
+
+def _delivery_for_user(
+    session: Session, delivery_id: uuid.UUID, user_id: uuid.UUID
+) -> Delivery | None:
+    query = (
+        select(Delivery)
+        .join(Project, Delivery.project_id == Project.id)
+        .where(Delivery.id == delivery_id, Project.user_id == user_id)
+    )
+    return session.scalars(query).one_or_none()
+
+
+def _parse_rfc3339(value: str) -> datetime | None:
+    text = value.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
 # ingest_url for GET/list (and create).
 # {INGEST_BASE_URL}/ingest/{source_id}. strip a trailing slash on the base so the path is not doubled.
 def _ingest_url(source_id: uuid.UUID) -> str:
@@ -118,6 +161,26 @@ def _source_public(source: Source) -> dict:
         "ingest_url": _ingest_url(source.id),
         "created_at": _rfc3339_utc(source.created_at),
     }
+
+
+def _event_list_public(event: Event) -> dict:
+    return {
+        "id": str(event.id),
+        "project_id": str(event.project_id),
+        "source_id": str(event.source_id),
+        "provider_delivery_id": event.provider_delivery_id,
+        "event_type": event.event_type,
+        "status": event.status,
+        "byte_size": event.byte_size,
+        "correlation_id": str(event.correlation_id),
+        "accepted_at": _rfc3339_utc(event.accepted_at),
+    }
+
+
+def _event_body_text(event: Event) -> str | None:
+    if event.body is None:
+        return None
+    return event.body.decode("utf-8", errors="replace")
 
 
 @api_router.get("/projects")
@@ -421,4 +484,177 @@ def rotate_source_secret(
     secret_row.ciphertext = encrypt_secret(secret)
     session.commit()
     return {"secret": secret}
+
+
+# GET /api/projects/{project_id}/events
+# 1. Path param project_id (UUID). FastAPI 422s if it is not a UUID.
+# 2. JWT is already checked: user_id comes from require_user_id.
+# 3. Load the Project where id == project_id and user_id == this user. No row: 404 not_found.
+# 4. Optional filters: source_id, event_type, status, from, to, limit, before.
+# 5. Order accepted_at DESC. next_before is the last item id when there is another page.
+@api_router.get("/projects/{project_id}/events")
+def list_events(
+    project_id: uuid.UUID,
+    source_id: uuid.UUID | None = None,
+    event_type: str | None = None,
+    status: str | None = None,
+    from_: str | None = Query(default=None, alias="from"),
+    to: str | None = None,
+    limit: int = 50,
+    before: uuid.UUID | None = None,
+    user_id: uuid.UUID = Depends(require_user_id),
+    session: Session = Depends(get_session),
+) -> dict:
+    project = _project_for_user(session, project_id, user_id)
+    if project is None:
+        return error_response(404, "not_found", "Project not found.")
+
+    if status is not None and status not in ("accepted", "payload_purged"):
+        return error_response(422, "validation_error", "Status must be accepted or payload_purged.")
+    if limit < 1:
+        return error_response(422, "validation_error", "Limit must be at least 1.")
+    if limit > 100:
+        limit = 100
+
+    accepted_from = None
+    accepted_to = None
+    if from_ is not None:
+        accepted_from = _parse_rfc3339(from_)
+        if accepted_from is None:
+            return error_response(422, "validation_error", "from must be RFC 3339.")
+    if to is not None:
+        accepted_to = _parse_rfc3339(to)
+        if accepted_to is None:
+            return error_response(422, "validation_error", "to must be RFC 3339.")
+
+    query = select(Event).where(Event.project_id == project.id)
+    if source_id is not None:
+        query = query.where(Event.source_id == source_id)
+    if event_type is not None:
+        query = query.where(Event.event_type == event_type)
+    if status is not None:
+        query = query.where(Event.status == status)
+    if accepted_from is not None:
+        query = query.where(Event.accepted_at >= accepted_from)
+    if accepted_to is not None:
+        query = query.where(Event.accepted_at <= accepted_to)
+    if before is not None:
+        cursor = session.scalars(
+            select(Event).where(Event.id == before, Event.project_id == project.id)
+        ).one_or_none()
+        if cursor is None:
+            return error_response(404, "not_found", "Event not found.")
+        query = query.where(
+            (Event.accepted_at < cursor.accepted_at)
+            | ((Event.accepted_at == cursor.accepted_at) & (Event.id < cursor.id))
+        )
+
+    query = query.order_by(Event.accepted_at.desc(), Event.id.desc()).limit(limit + 1)
+    events = list(session.scalars(query).all())
+    next_before = None
+    if len(events) > limit:
+        events = events[:limit]
+        next_before = str(events[-1].id)
+
+    items = []
+    for event in events:
+        items.append(_event_list_public(event))
+    return {"items": items, "next_before": next_before}
+
+
+# GET /api/events/{event_id}
+# 1. Path param event_id (UUID). FastAPI 422s if it is not a UUID.
+# 2. Join events to projects. tenant-scope on Project.user_id.
+# 3. No row: 404 not_found.
+# 4. List fields plus body, content_type, deliveries summary (attempt_count, no attempts).
+@api_router.get("/events/{event_id}")
+def get_event(
+    event_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_user_id),
+    session: Session = Depends(get_session),
+) -> dict:
+    event = _event_for_user(session, event_id, user_id)
+    if event is None:
+        return error_response(404, "not_found", "Event not found.")
+
+    deliveries = session.scalars(
+        select(Delivery).where(Delivery.event_id == event.id).order_by(Delivery.created_at.asc())
+    ).all()
+    delivery_items = []
+    for delivery in deliveries:
+        attempt_count = session.scalar(
+            select(func.count()).where(DeliveryAttempt.delivery_id == delivery.id)
+        )
+        delivery_items.append(
+            {
+                "id": str(delivery.id),
+                "destination_id": str(delivery.destination_id),
+                "status": delivery.status,
+                "attempt_count": int(attempt_count or 0),
+                "replayed_from_delivery_id": (
+                    str(delivery.replayed_from_delivery_id)
+                    if delivery.replayed_from_delivery_id is not None
+                    else None
+                ),
+                "suite_run_id": (
+                    str(delivery.suite_run_id) if delivery.suite_run_id is not None else None
+                ),
+            }
+        )
+
+    item = _event_list_public(event)
+    item["body"] = _event_body_text(event)
+    item["content_type"] = event.content_type
+    item["deliveries"] = delivery_items
+    return item
+
+
+# GET /api/deliveries/{delivery_id}
+# 1. Path param delivery_id (UUID). FastAPI 422s if it is not a UUID.
+# 2. Join deliveries to projects. tenant-scope on Project.user_id.
+# 3. No row: 404 not_found.
+# 4. Return delivery plus attempts ordered by attempt_number.
+@api_router.get("/deliveries/{delivery_id}")
+def get_delivery(
+    delivery_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_user_id),
+    session: Session = Depends(get_session),
+) -> dict:
+    delivery = _delivery_for_user(session, delivery_id, user_id)
+    if delivery is None:
+        return error_response(404, "not_found", "Delivery not found.")
+
+    attempts = session.scalars(
+        select(DeliveryAttempt)
+        .where(DeliveryAttempt.delivery_id == delivery.id)
+        .order_by(DeliveryAttempt.attempt_number.asc())
+    ).all()
+    attempt_items = []
+    for attempt in attempts:
+        attempt_items.append(
+            {
+                "id": str(attempt.id),
+                "attempt_number": attempt.attempt_number,
+                "http_status": attempt.http_status,
+                "duration_ms": attempt.duration_ms,
+                "error_category": attempt.error_category,
+                "response_excerpt": attempt.response_excerpt,
+                "correlation_id": str(attempt.correlation_id),
+                "completed_at": _rfc3339_utc(attempt.completed_at),
+            }
+        )
+    return {
+        "id": str(delivery.id),
+        "event_id": str(delivery.event_id),
+        "destination_id": str(delivery.destination_id),
+        "status": delivery.status,
+        "replayed_from_delivery_id": (
+            str(delivery.replayed_from_delivery_id)
+            if delivery.replayed_from_delivery_id is not None
+            else None
+        ),
+        "suite_run_id": str(delivery.suite_run_id) if delivery.suite_run_id is not None else None,
+        "release_after": _rfc3339_utc(delivery.release_after),
+        "attempts": attempt_items,
+    }
  
