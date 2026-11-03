@@ -1,11 +1,12 @@
-from cryptography.fernet import Fernet
+import os
 
-from hookitagain.settings import get_settings
+from cryptography.fernet import Fernet
 
 
 def _fernet(key: str | None = None) -> Fernet:
     # one process key wraps source and destination BYTEA ciphertext
-    material = key if key is not None else get_settings().secret_encryption_key.get_secret_value()
+    # SECRET_ENCRYPTION_KEY from the process env. not get_settings() (FastAPI)
+    material = key if key is not None else os.environ["SECRET_ENCRYPTION_KEY"]
     return Fernet(material.encode())
 
 

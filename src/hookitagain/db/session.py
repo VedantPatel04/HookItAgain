@@ -1,3 +1,4 @@
+import os
 from collections.abc import Generator
 from functools import lru_cache
 
@@ -5,11 +6,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
-from hookitagain.settings import get_settings
-
 
 def _runtime_url() -> str:
-    raw = str(get_settings().database_url)
+    # DATABASE_URL from the process env. Render and Lambda both set it.
+    raw = os.environ["DATABASE_URL"]
     if raw.startswith("postgres://"):
         return "postgresql+psycopg://" + raw.removeprefix("postgres://")
     if raw.startswith("postgresql://"):

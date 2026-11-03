@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from hookitagain.settings import Settings
+from hookitagain.settings import LambdaSettings, Settings
 
 
 def test_settings_fail_fast_without_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -17,3 +17,14 @@ def test_settings_fail_fast_without_env(monkeypatch: pytest.MonkeyPatch) -> None
         monkeypatch.delenv(key, raising=False)
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
+
+
+def test_lambda_settings_fail_fast_without_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    for key in (
+        "DATABASE_URL",
+        "SECRET_ENCRYPTION_KEY",
+        "DELIVERY_QUEUE_URL",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    with pytest.raises(ValidationError):
+        LambdaSettings()
