@@ -2,6 +2,7 @@ import base64
 import hashlib
 import hmac
 import json
+import time
 import uuid
 from datetime import date, datetime, timezone
 
@@ -13,6 +14,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from hookitagain.crypto import decrypt_secret
+from hookitagain.metrics import emit_count, emit_ms
 from hookitagain.db.models import (
     Delivery,
     Event,
@@ -68,6 +70,7 @@ def _send_outbox_message(queue_url: str, outbox_job_id: uuid.UUID) -> None:
 def handle(event, context):
     # Read the Lambda event, source_id is in the path, HMAC is over the exact raw body,
     # headers are lowercase, this is not a FastAPI route
+    started = time.monotonic()
     raw_path = event.get("rawPath") or ""
     parts = raw_path.strip("/").split("/")
     try:
@@ -109,7 +112,7 @@ def handle(event, context):
     # Open Postgres, same database as Render, Lambda env, not FastAPI Settings
     settings = get_lambda_settings()
     with Session(get_engine()) as session:
-        return ingest(
+        result = ingest(
             source_id,
             raw_body,
             provider_delivery_id,
@@ -119,6 +122,12 @@ def handle(event, context):
             session,
             settings,
         )
+    if result.get("statusCode") == 202:
+        emit_ms(
+            "ingestion_ack_latency_ms",
+            max(0, int((time.monotonic() - started) * 1000)),
+        )
+    return result
 
 
 def ingest(
@@ -265,6 +274,7 @@ def ingest(
         )
         session.add(outbox)
         session.commit()
+        emit_count("accepted_events_total")
     except IntegrityError:
         session.rollback()
         raced = session.scalars(

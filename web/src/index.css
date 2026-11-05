@@ -84,6 +84,30 @@ body {
   font-size: 14px;
 }
 
+.lab form {
+  margin: 12px 0 20px;
+}
+
+.lab label {
+  display: block;
+  margin: 8px 0 4px;
+}
+
+.lab input,
+.lab select,
+.lab button {
+  font: inherit;
+  margin-right: 8px;
+  margin-bottom: 8px;
+}
+
+.lab .once {
+  background: var(--code-bg);
+  padding: 12px;
+  margin: 12px 0;
+  word-break: break-all;
+}
+
 h1,
 h2 {
   font-family: var(--heading);

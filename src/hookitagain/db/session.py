@@ -9,7 +9,11 @@ from sqlalchemy.orm import Session
 
 def _runtime_url() -> str:
     # DATABASE_URL from the process env. Render and Lambda both set it.
-    raw = os.environ["DATABASE_URL"]
+    # local uvicorn does not export .env, Settings still has the URL
+    raw = os.environ.get("DATABASE_URL")
+    if not raw:
+        from hookitagain.settings import get_settings
+        raw = str(get_settings().database_url)
     if raw.startswith("postgres://"):
         return "postgresql+psycopg://" + raw.removeprefix("postgres://")
     if raw.startswith("postgresql://"):
