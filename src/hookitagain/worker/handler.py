@@ -11,6 +11,7 @@ from hookitagain.api.ssrf import https_destination_url_rejected
 from hookitagain.crypto import decrypt_secret
 from hookitagain.db.models import Delivery, DeliveryAttempt, Destination, Event, OutboxJob
 from hookitagain.db.session import get_engine
+from hookitagain.metrics import emit_ms
 from hookitagain.settings import LambdaSettings, get_lambda_settings
 
 DELIVERY_HTTP_TIMEOUT_SECONDS = 10
@@ -172,6 +173,7 @@ def deliver(
         delivery.status = _status_after_failed_attempt(attempt_number)
         delivery.updated_at = now
         session.commit()
+        emit_ms("delivery_http_ms", 0)
         raise DeliveryRetry("destination URL is blocked")
 
     plaintext = decrypt_secret(
@@ -235,9 +237,18 @@ def deliver(
         delivery.status = "succeeded"
         delivery.updated_at = now
         session.commit()
+        emit_ms("delivery_http_ms", duration_ms)
+        accepted_at = event.accepted_at
+        if accepted_at.tzinfo is None:
+            accepted_at = accepted_at.replace(tzinfo=timezone.utc)
+        emit_ms(
+            "delivery_latency_ms",
+            max(0, int((now - accepted_at).total_seconds() * 1000)),
+        )
         return
 
     delivery.status = _status_after_failed_attempt(attempt_number)
     delivery.updated_at = now
     session.commit()
+    emit_ms("delivery_http_ms", duration_ms)
     raise DeliveryRetry(error_category)
